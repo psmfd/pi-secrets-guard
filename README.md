@@ -1,34 +1,17 @@
-# pi-secrets-guard
+# secrets-guard
 
-> **Distribution mirror.** Developed in a private source-of-truth repo and synced here for distribution
-> (current sync: `pi_config@d653613`, 2026-06-12). The `main` branch is force-synced — please don't
-> target PRs at it directly; file an [issue](https://github.com/psmfd/pi-secrets-guard/issues)
-> instead and fixes will land via the next sync.
-
-Pi extension that blocks tool calls which would write or surface secrets. Companion to `pi-bash-destructive-guard` — together they bracket the two highest-frequency catastrophic outcomes (credential exfiltration and data destruction).
-
-## Install
-
-```bash
-pi install git:github.com/psmfd/pi-secrets-guard@v0.1.0
-```
-
-Or try it for a single session without installing:
-
-```bash
-pi -e git:github.com/psmfd/pi-secrets-guard
-```
-
-No build step — pi loads the TypeScript directly. The pi SDK is bundled by pi itself; this extension has no runtime dependencies of its own.
+Pi extension that blocks tool calls which would write or surface secrets. Implements the runtime layer specified in [`agent/rules/secrets-guard.md`](../../rules/secrets-guard.md). The git pre-commit hook (`hooks/secrets-guard.sh`, also delivered in Phase C) covers the commit-time layer with the same patterns and override mechanisms.
 
 ## Hooked events
 
-- **`tool_call` for `write`, `edit`, and `artifact_review`** — scans the content payload for secret patterns; refuses to write to vault-named files lacking the `$ANSIBLE_VAULT` header; refuses to write to sensitive basenames (`id_rsa`, etc.) or sensitive extensions (`*.pem`, `*.key`). `artifact_review` is the custom tool registered by the companion [`pi-artifact-handoff`](https://github.com/psmfd/pi-artifact-handoff) extension; it is shaped like `write` (path + content) and joins the same scan branch.
+- **`tool_call` for `write`, `edit`, and `artifact_review`** — scans the content payload for secret patterns; refuses to write to vault-named files lacking the `$ANSIBLE_VAULT` header; refuses to write to sensitive basenames (`id_rsa`, etc.) or sensitive extensions (`*.pem`, `*.key`). `artifact_review` is the custom tool registered by [`artifact-handoff/`](../artifact-handoff/README.md) (ADR-0006 § Tooling); it is shaped like `write` (path + content) and joins the same branch — see [Tool-call coverage](#tool-call-coverage) below for the regression-test rationale.
 - **`tool_call` for `bash`** — scans the command for inline secret literals and references to sensitive credential file paths (`~/.aws/credentials`, `~/.ssh/id_rsa`, `~/.kube/config`, `~/.netrc`, etc.).
 
 ## Tool-call coverage
 
 Custom tools that write content do **not** inherit `write`/`edit` coverage automatically — the tool-call handler matches on `event.toolName`. When a new write-shaped custom tool is registered, it MUST be added to the content-scan branch in `index.ts`. `artifact_review` is currently the only such tool.
+
+`scripts/validate.sh` § 6b — secrets-guard SKIP_PATH_GLOBS smoke test asserts that `drafts/**` and `.review/**` are NOT in the `SKIP_PATH_GLOBS` constant. Either appearing there would silently disable scans for those paths and violate the ADR-0006 § Consequences commitment. The smoke test fails `validate.sh` if either glob is added.
 
 ## Patterns blocked
 
@@ -38,7 +21,7 @@ Custom tools that write content do **not** inherit `write`/`edit` coverage autom
 - Unencrypted vault files (vault-named YAML lacking the `$ANSIBLE_VAULT` first-line header)
 - Writes to sensitive file paths (`id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519`, plus `.pem`/`.key` variants)
 
-The pattern set lives at the top of `index.ts` as the single source of truth. If you pair this extension with a git pre-commit secrets hook, keep the two pattern sets in lockstep.
+The pattern set lives at the top of `index.ts` as the single source of truth — keep it in lockstep with `hooks/secrets-guard.sh`.
 
 ## Skip patterns (extension does not scan)
 
@@ -46,7 +29,7 @@ Files matching `*.example`, `*.sample`, `*.template`, `*.j2`, or paths under `mo
 
 ## Refusal policy (per-rule)
 
-The `damage-control-continue` pattern (from [`disler/pi-vs-claude-code`](https://github.com/disler/pi-vs-claude-code)) distinguishes **hard refusals** — where any retry is wrong and the agent should escalate to the user — from **continue-eligible** blocks, where the agent can recover by trying a modified approach. This extension classifies its rules accordingly; `reason:` payloads carry explicit guidance:
+The `damage-control-continue` pattern (from `disler/pi-vs-claude-code`, evaluated in [#69](https://github.com/TheSemicolon/pi_config/issues/69)) distinguishes **hard refusals** — where any retry is wrong and the agent should escalate to the user — from **continue-eligible** blocks, where the agent can recover by trying a modified approach. This extension classifies its rules accordingly; `reason:` payloads carry explicit guidance:
 
 | Rule | Policy | Rationale |
 |---|---|---|
@@ -56,9 +39,11 @@ The `damage-control-continue` pattern (from [`disler/pi-vs-claude-code`](https:/
 | Inline secret literal in `bash` command | Continue-eligible | The agent can read from an env var or file instead of inlining the literal. |
 | `bash` command references sensitive credential path | Continue-eligible | The agent can ask the user for just the needed field, use `test -f`/`ls -l` for existence checks, or escalate. |
 
+Neither the upstream `damage-control.ts` nor `damage-control-continue.ts` were vendored. The pattern adoption is pi-native: pi's `{block, reason}` return is already the no-abort path (this extension has never called `ctx.abort()`), so the actionable change is the per-rule policy classification and adaptive-feedback wording in `reason:` payloads.
+
 ## Override mechanisms
 
-Both surfaces **announce themselves via `ctx.ui.notify` on use** — silent overrides are not supported.
+Both surfaces **announce themselves via `ctx.ui.notify`** on use — silent overrides are not supported (ADR-0022 § Q5, backported per issue #258).
 
 | Override | Scope | Visibility |
 |---|---|---|
@@ -80,15 +65,3 @@ The allowlist accepts one path glob per line (`*` matches a path segment, `**` m
 - Does not detect inline `!vault |` scalars in partially-encrypted YAML files (would require a YAML parser; out of scope).
 - Bash sensitive-path detection is conservative — only obvious read-and-leak filenames are flagged. Sophisticated exfiltration paths are not in scope for a regex-level guard.
 - The extension scans the **first 512 KB** of any content payload. Larger payloads are partially scanned.
-
-## Development
-
-```bash
-npm install
-npm run typecheck
-npm test
-```
-
-## License
-
-[MIT](LICENSE)
