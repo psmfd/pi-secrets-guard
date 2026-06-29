@@ -1,25 +1,30 @@
 {
-	"name": "@psmfd/pi-secrets-guard",
-	"version": "0.1.0",
-	"description": "Pi extension: blocks tool calls that would write or surface secrets (PEM keys, AWS keys, GitHub PATs, unencrypted vault files, sensitive paths)",
-	"type": "module",
-	"license": "MIT",
-	"repository": "github:psmfd/pi-secrets-guard",
-	"keywords": ["pi", "pi-extension"],
-	"pi": {
-		"extensions": ["./index.ts"]
-	},
-	"scripts": {
-		"typecheck": "tsc --noEmit",
-		"test": "tsx --test test/*.test.ts"
-	},
-	"peerDependencies": {
-		"@earendil-works/pi-coding-agent": ">=0.75"
-	},
-	"devDependencies": {
-		"@earendil-works/pi-coding-agent": "0.80.2",
-		"@types/node": "^25.9.3",
-		"tsx": "^4.19.2",
-		"typescript": "^6.0.3"
-	}
+  "name": "@psmfd/pi-secrets-guard",
+  "version": "0.1.1",
+  "description": "Pi extension: blocks tool calls that would write or surface secrets (PEM keys, AWS keys, GitHub PATs, unencrypted vault files, sensitive paths)",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:psmfd/pi-secrets-guard",
+  "keywords": [
+    "pi",
+    "pi-extension"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.75"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.80.2",
+    "@types/node": "^25.9.3",
+    "tsx": "^4.19.2",
+    "typescript": "^6.0.3"
+  }
 }

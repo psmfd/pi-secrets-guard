@@ -2,6 +2,14 @@
 
 Pi extension that blocks tool calls which would write or surface secrets. Implements the runtime layer specified in [`agent/rules/secrets-guard.md`](https://github.com/psmfd/pi-config/blob/main/agent/rules/secrets-guard.md). The git pre-commit hook (`hooks/secrets-guard.sh`, also delivered in Phase C) covers the commit-time layer with the same patterns and override mechanisms.
 
+## Install
+
+```sh
+pi install git:github.com/psmfd/pi-secrets-guard
+```
+
+Try it first without installing: `pi -e git:github.com/psmfd/pi-secrets-guard`.
+
 ## Hooked events
 
 - **`tool_call` for `write`, `edit`, and `artifact_review`** — scans the content payload for secret patterns; refuses to write to vault-named files lacking the `$ANSIBLE_VAULT` header; refuses to write to sensitive basenames (`id_rsa`, etc.) or sensitive extensions (`*.pem`, `*.key`). `artifact_review` is the custom tool registered by [`artifact-handoff/`](https://github.com/psmfd/pi-artifact-handoff) (ADR-0006 § Tooling); it is shaped like `write` (path + content) and joins the same branch — see [Tool-call coverage](#tool-call-coverage) below for the regression-test rationale.
