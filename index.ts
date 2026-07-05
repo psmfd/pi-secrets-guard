@@ -8,7 +8,8 @@
  * What it blocks:
  *   - PEM private-key headers in write/edit content or bash heredoc bodies
  *   - AWS access key IDs (AKIA/ASIA/ABIA/ACCA + 16 alnum)
- *   - GitHub personal access tokens (ghp_*, github_pat_*)
+ *   - GitHub tokens (gh[oprsu]_*, github_pat_*)
+ *   - Signed JWTs (header.payload.signature) and Authorization: Bearer literals
  *   - Vault-named files written without the $ANSIBLE_VAULT header
  *   - Sensitive file paths (id_rsa, *.pem, *.key) being written
  *   - bash commands referencing sensitive file paths in unsafe ways
@@ -29,19 +30,39 @@ import { basename } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 // --- Shared pattern set -----------------------------------------------------
-// Keep this in lockstep with hooks/secrets-guard.sh.
+// Keep this in lockstep with hooks/secrets-guard.sh and
+// agent/extensions/expertise-client/lib/secret-scan.ts (ADR-0071; framework
+// ADR-095 for the JWT/Bearer detectors). validate.sh
+// check_secret_pattern_lockstep enforces parity.
 
 const SECRET_PATTERNS: Array<{ name: string; re: RegExp }> = [
   {
     name: "pem-private-key",
-    re: /-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |)PRIVATE KEY/,
+    // ENCRYPTED covers the PKCS#8 header form (openssl pkcs8 -topk8, RFC 5958).
+    re: /-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED |)PRIVATE KEY/,
   },
   {
     name: "aws-access-key",
     re: /(^|[^A-Z0-9])(AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}([^A-Z0-9]|$)/,
   },
-  { name: "github-pat-classic", re: /ghp_[A-Za-z0-9]{36}/ },
-  { name: "github-pat-fine-grained", re: /github_pat_[A-Za-z0-9_]{82}/ },
+  // All five documented GitHub token prefixes (gho/ghp/ghr/ghs/ghu), open-ended
+  // body to match the longer ghs_ format.
+  { name: "github-token", re: /gh[oprsu]_[A-Za-z0-9]{36,}/ },
+  { name: "github-pat-fine-grained", re: /github_pat_[A-Za-z0-9_]{82,}/ },
+  // Signed JWT (header.payload.signature; `eyJ` = base64url `{"`). Signed tokens
+  // only; unsigned/alg:none out of scope (ADR-095 / #64).
+  {
+    name: "signed-jwt",
+    // Segments upper-bounded ({10,4000}) so the chained `{n,}\.` shape cannot
+    // drive O(n²) backtracking on adversarial ~512KB non-dot input (ADR-0071).
+    re: /eyJ[A-Za-z0-9_-]{10,4000}\.eyJ[A-Za-z0-9_-]{10,4000}\.[A-Za-z0-9_-]{10,4000}/,
+  },
+  // Authorization: Bearer <20+ token chars>; the length bound skips `%s`/`<key>`/
+  // `$VAR` placeholders (ADR-095).
+  {
+    name: "authorization-bearer",
+    re: /[Aa]uthorization: [Bb]earer [A-Za-z0-9._~+/=-]{20,}/,
+  },
 ];
 
 const VAULT_HEADER_RE = /^\$ANSIBLE_VAULT;[0-9]+\.[0-9]+;[A-Z0-9]+/;
