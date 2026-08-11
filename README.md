@@ -178,7 +178,10 @@ flowchart LR
 vault block/allow incl. the widened `*vault*.yml` form, sensitive-basename
 refusals incl. FIDO2 keys, skip patterns, allowlist precedence, the
 missing-path content scan, edit newText-only scanning, and the bash branch
-incl. the `.pub` exception).
+incl. the `.pub` exception). `scripts/test-secrets-guard-hook.sh` exercises the
+standalone pre-commit layer in isolated repositories: portable PEM/JWT
+matching, all 10–4000 JWT segment boundaries, and fail-closed grep, awk, and
+staged-file enumeration errors.
 
 ## Limitations
 

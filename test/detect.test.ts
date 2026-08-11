@@ -21,6 +21,8 @@ const AWS_KEY = ["AKIA", "ABCDEFGHIJKLMNOP"].join("");
 const GH_TOKEN = `ghp_${"a".repeat(36)}`;
 const GH_PAT = `github_pat_${"a".repeat(82)}`;
 const JWT = `eyJ${"a".repeat(20)}.eyJ${"b".repeat(20)}.${"c".repeat(20)}`;
+const JWT_OVERLONG_SIGNATURE = `eyJ${"a".repeat(20)}.eyJ${"b".repeat(20)}.${"c".repeat(4001)}`;
+const JWT_NESTED_VALID_START = `eyJ${"a".repeat(4001)}${JWT}`;
 const BEARER = `Authorization: Bearer ${"t".repeat(24)}`;
 
 function write(path: string, content: string, allowlist: string[] = NO_ALLOW): string | null {
@@ -47,6 +49,14 @@ test("write blocked for each of the six content-pattern classes", () => {
 
 test("clean content is allowed", () => {
   assert.equal(write("notes/config.txt", "just ordinary text"), null);
+});
+
+test("signed JWT signature must end within the 4000-character bound (#922)", () => {
+  assert.equal(write("notes/config.txt", JWT_OVERLONG_SIGNATURE), null);
+});
+
+test("signed JWT detection retries a valid start nested in an overlong segment (#922)", () => {
+  assert.ok(write("notes/config.txt", JWT_NESTED_VALID_START)?.includes("signed-jwt"));
 });
 
 // --- Vault naming -------------------------------------------------------------
