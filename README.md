@@ -48,7 +48,9 @@ sequenceDiagram
 
 ## Tool-call coverage
 
-Custom tools that write content do **not** inherit `write`/`edit` coverage automatically — the tool-call handler matches on `event.toolName`. When a new write-shaped custom tool is registered, it MUST be added to the content-scan branch in `index.ts`. `artifact_review` is currently the only such tool.
+Custom tools that write content do **not** inherit `write`/`edit` coverage automatically — the tool-call handler matches on `event.toolName`. When a new write-shaped custom tool is registered, it MUST be added to the content-scan branch in `index.ts`. `artifact_review` is currently the only such added tool name.
+
+A custom tool that **overrides an already-covered name** with a different input shape also needs explicit integration — the name matches but the content extraction is shape-specific. The `edit` branch handles both known shapes: core pi's `edits[].newText` and the `hashline-edit` extension's `edits[].lines[]` / `newText` (plus its pre-normalization JSON-string `edits` dialect, scanned raw). Anchors and `oldText` are deliberately unscanned — they mirror content already on disk (#976).
 
 `scripts/validate.sh` § 6b — secrets-guard SKIP_PATH_GLOBS smoke test asserts that `drafts/**` and `.review/**` are NOT in the `SKIP_PATH_GLOBS` constant. Either appearing there would silently disable scans for those paths and violate the ADR-0006 § Consequences commitment. The smoke test fails `validate.sh` if either glob is added.
 

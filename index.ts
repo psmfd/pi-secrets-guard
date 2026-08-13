@@ -1,3 +1,6 @@
+// PI-EXTENSION-CAPABILITY: no-registerTool
+// Gated by validate.sh 6b-quinquies (ADR-0139): the declaration and the code must agree.
+
 /**
  * secrets-guard — pi extension
  *
@@ -200,9 +203,34 @@ export function checkWriteLikeCall(
       content = JSON.stringify(raw);
     }
   } else {
-    // edit: { path, edits: [{ oldText, newText }, ...] }
-    const edits = (input as { edits?: Array<{ newText?: string }> }).edits ?? [];
-    content = edits.map((e) => e.newText ?? "").join("\n");
+    // edit: two input shapes share the tool name "edit" —
+    //   core pi edit:            { path, edits: [{ oldText, newText }, ...] }
+    //   hashline-edit override:  { path, edits: [{ op, pos, end?, lines?, newText? }, ...] }
+    // New content is `newText` (core + hashline replaceText op) plus every
+    // entry of `lines[]` (hashline replace/append/prepend ops). Anchors and
+    // oldText are deliberately not scanned — they mirror content already on
+    // disk, not newly introduced material. hashline-edit also accepts a
+    // JSON-string `edits` dialect that its prepareArguments normalizes; scan
+    // the raw string too so hook ordering can never open a gap (#976).
+    const rawEdits = (input as { edits?: unknown }).edits;
+    if (typeof rawEdits === "string") {
+      content = rawEdits;
+    } else {
+      const edits = Array.isArray(rawEdits)
+        ? (rawEdits as Array<{ newText?: string; lines?: unknown }>)
+        : [];
+      content = edits
+        .map((e) => {
+          const lineText = Array.isArray(e.lines)
+            ? e.lines.filter((line): line is string => typeof line === "string").join("\n")
+            : "";
+          return [typeof e.newText === "string" ? e.newText : "", lineText]
+            .filter(Boolean)
+            .join("\n");
+        })
+        .filter(Boolean)
+        .join("\n");
+    }
   }
 
   if (!path) {

@@ -127,6 +127,56 @@ test("edit newText is scanned; oldText (removal) is not", () => {
   );
 });
 
+// --- Edit shape: hashline-edit override (#976) ----------------------------------
+// The hashline-edit extension overrides the tool name "edit" with a different
+// edits shape: [{ op, pos, end?, lines?, newText? }]. New content arrives in
+// `lines[]` (replace/append/prepend) and `newText` (replaceText); anchors are
+// on-disk content and stay unscanned. A JSON-string `edits` dialect exists
+// pre-normalization and is scanned raw.
+
+test("hashline edit lines[] entries are scanned", () => {
+  assert.ok(
+    checkWriteLikeCall(
+      "edit",
+      {
+        path: "a.txt",
+        edits: [
+          { op: "replace", pos: "2#ZP", lines: ["clean line", `token = ${GH_TOKEN}`] },
+        ],
+      },
+      NO_ALLOW,
+    )?.includes("github-token"),
+  );
+  assert.equal(
+    checkWriteLikeCall(
+      "edit",
+      { path: "a.txt", edits: [{ op: "replace", pos: "2#ZP", lines: ["clean"] }] },
+      NO_ALLOW,
+    ),
+    null,
+  );
+});
+
+test("hashline edit append/prepend lines are scanned", () => {
+  assert.ok(
+    checkWriteLikeCall(
+      "edit",
+      { path: "a.txt", edits: [{ op: "append", lines: [GH_TOKEN] }] },
+      NO_ALLOW,
+    )?.includes("github-token"),
+  );
+});
+
+test("JSON-string edits dialect is scanned raw", () => {
+  assert.ok(
+    checkWriteLikeCall(
+      "edit",
+      { path: "a.txt", edits: JSON.stringify([{ op: "append", lines: [GH_TOKEN] }]) },
+      NO_ALLOW,
+    )?.includes("github-token"),
+  );
+});
+
 // --- Bash branch ------------------------------------------------------------------
 
 test("bash: inline literals and sensitive-path reads blocked; public keys allowed", () => {
